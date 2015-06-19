@@ -3,19 +3,24 @@ use strict;
 use Net::Pcap;
 use Net::Frame::Device;
 use Net::Netmask;
-use Net::Frame::Dump::Online;
+use Net::Frame::Dump::Online;#tcpdump like implementation, online mode
 use Net::ARP;
 use Net::Frame::Simple;
+use Data::Dumper;
+my $err = "";
+my $dev = pcap_lookupdev( \$err )
+  ; # from Net::Pcap Returns the name of a network device(e.g eth0) that can be used for further exploration
+my $devProp = Net::Frame::Device->new( dev => $dev )
+  ; #Get default values from system specified in dev. dev stands for network device.
+my $ip       = $devProp->ip;
+my $gateway  = $devProp->gatewayIp;
+my $netmask  = new Net::Netmask( $devProp->subnet );
+my $mac      = $devProp->mac;
+my $netblock = $ip . ":" . $netmask->mask();
+#Upto here we got network iformation about our own system 
 
-my $err       = "";
-my $dev       = pcap_lookupdev( \$err );                  # from Net::Pcap
-my $devProp   = Net::Frame::Device->new( dev => $dev );
-my $ip        = $devProp->ip;
-my $gateway   = $devProp->gatewayIp;
-my $netmask   = new Net::Netmask( $devProp->subnet );
-my $mac       = $devProp->mac;
-my $netblock  = $ip . ":" . $netmask->mask();
-my $filterStr = "arp and dst host " . $ip;
+#########################################################################################################################
+my $filterStr = "arp and dst host " . $ip; #created an ARP filter to use.
 my $pcap      = Net::Frame::Dump::Online->new(
 	dev           => $dev,
 	filter        => $filterStr,
@@ -30,17 +35,18 @@ print "Gateway IP: ", $gateway, "\n", "Starting scan\n";
 for my $ipts ( $netmask->enumerate ) {
 	Net::ARP::send_packet(
 		$dev,
-		$ip,
-		$ipts,
+		$ip, #device ip
+		$ipts,#destination ip
 		$mac,
 		"ff:ff:ff:ff:ff:ff",       # broadcast
-		"request"
+		"request" #arp operation
 	);
+	#print $ipts,"\n";
 }
 until ( $pcap->timeout ) {
-	if ( my $next = $pcap->next ) {    # frame according to $filterStr
+	if ( my $next = $pcap->next ) {    # next frame filtered according to $filterStr 
 		my $fref = Net::Frame::Simple->newFromDump($next);
-
+#print Dumper $fref,"\n";
 		# we don't have to worry about the operation codes 1, or 2
 		# because of the $filterStr
 		print $fref->ref->{ARP}->srcIp, " is alive\n";
