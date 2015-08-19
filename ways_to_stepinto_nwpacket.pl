@@ -20,11 +20,13 @@ sub cap {
 	my ( $user_data, $hdr, $pkt ) = @_;
 	pcap_dump( $dumper, $hdr, $pkt )
 	  ; #Dump the packet described by header %header and packet data $packet to the savefile associated with $dumper.
-print Dumper $pkt; 
-	# walk through each byte:
-	my $src = sprintf( "%02x:%02x:%02x:%02x:%02x:%02x", unpack( "C6", $pkt ) );#src mac
+
+	my $testsrc= unpack( "x12 C2", $pkt ) ;
+	print $testsrc,"\n";
+	my $src =
+	  sprintf( "%02x:%02x:%02x:%02x:%02x:%02x", unpack( "C6", $pkt ) ); #src mac here C6 is unpacking 6 bytes of data as unsigned integer and then sprintf is converting that to hex by %02x template
 	my $dst = sprintf(
-		"%02x:%02x:%02x:%02x:%02x:%02x",    # 6 bytes #dst mac
+		"%02x:%02x:%02x:%02x:%02x:%02x",    # Same as src mac we are just using substr and ord instead of unpack
 		ord( substr( $pkt, 6,  2 ) ),
 		ord( substr( $pkt, 7,  2 ) ),
 		ord( substr( $pkt, 8,  2 ) ),
@@ -34,26 +36,30 @@ print Dumper $pkt;
 	);
 
 	# here we see different methods for byte stepping:
-	my $type = hex( unpack( "x12 C2", $pkt ) );    # 2 bytes
+	
+	my $type = hex( unpack( "x12 C2", $pkt ) );    # 2 bytes -x12 means start after 12 bytes it stored  8 as a decimal value in type variable but its a hexadecimal digit. Is it right????
 
-	#my $type = unpack("x12 H4",$pkt);
 	my $ttl = hex( unpack( "x22 C1", $pkt ) )
 	  ;    # 1 byte C is unsigned char, xis null byte 22 times
+	  
 	my $ipv    = sprintf( "%02x", ord( substr( $pkt, 14, 1 ) ) );    # 1 byte
 	my $ipflag = sprintf( "%02x", ord( substr( $pkt, 20, 1 ) ) );    # 1 byte
 	my $proto  = sprintf( "%02x", ord( substr( $pkt, 23, 1 ) ) );    # 1 byte
+	
 	my $srcIP  = join ".",
 	  unpack( "x26 C4", $pkt )
 	  ;    # 26 (a repeat count)null bytes, 4 IP bytes, trunc
 	my $dstIP = join ".",
 	  unpack( "x30 C4", $pkt )
 	  ;    # 30 (a repeat count)null bytes, 4 IP bytes, trunc
+	
 	my $srcPort = hex(
 		"0x" . unpack( "H4", substr( $pkt, 34, 1 ) . substr( $pkt, 35, 1 ) ) );
 	my $dstPort = hex(
 		"0x" . unpack( "H4", substr( $pkt, 36, 1 ) . substr( $pkt, 37, 1 ) ) );
 	my $tcpFlag = sprintf( "%02x", ord( substr( $pkt, 47, 1 ) ) );
 	my $tcpBin = sprintf( "%08b", $tcpFlag );
+
 	print $src, " -> ", $dst, " Type:", $type, " TTL:", $ttl, " IPV:", $ipv,
 	  " IPFLAG:", $ipflag, " PROTO:", $proto, " SRCIP:", $srcIP, "
 DSTIP:", $dstIP, " SRCPORT:", $srcPort, " DSTPORT:", $dstPort, " TCPFLAG:
