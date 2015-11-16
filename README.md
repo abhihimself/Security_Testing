@@ -1,2 +1,2 @@
 # Security_Testing
-I am reading a book called Penetration testing with perl. I will try the example and exersise codes given in the book. I will archive the solved code for future refrence in this repository.
+Collection of scripts related to information gathering, SQL injection and Malwares. All these scripts are used in controlled lab envoirnment. Anybody who try to use these should follow the ethical code of conduct.
