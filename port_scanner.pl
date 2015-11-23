@@ -148,9 +148,9 @@ sub sendPacket {            # Target port = $_[0]
 sub oui {
 	my $mac = shift;
 	( my $macBytes = $mac ) =~ s/([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})
-([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/$1:$2:$3:$4:$5:$6/;
+([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/$1:$2:$3:$4:$5:$6/; #we have replaced the recieved mac with mm:mm:mm:mm:mm:mm format. This will be used foir printing
 	$oui = 1;         # make true
-	$mac =~ s/([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2}).*/$1\.$2\.$3/;
+	$mac =~ s/([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2}).*/$1\.$2\.$3/; #formatting it to match it from oui file
 	open( OUI, "oui.txt" ) || die "please download oui.txt from IEEE.org\n";
 	while ( my $l = <OUI> ) {
 		if ( $l =~ /$mac/i ) {

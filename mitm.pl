@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 use strict;
 #sudo iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 80 -j REDIRECT --to-ports 10000
-
+#system('sysctl -w net.ipv4.ip_forward=1');
 use NetPacket::TCP;        # packet disassembly
 use Net::Pcap;             # sniffing
 use Net::ARP;              # craft,send ARP to target
@@ -11,11 +11,11 @@ use Net::Frame::Simple;
 
 #################getting target info#####################
 my $usage= "Enter <targetip>, <targetmac>,<gatewayip>";
-my $target_ip  = shift or die("usage");
-my $target_mac = shift or die("usage");
-my $gateway_ip = shift or die("usage");
+my $target_ip  = shift or die("$usage");
+my $target_mac = shift or die("$usage");
+my $gateway_ip = shift or die("$usage");
 
-system('sysctl -w net.ipv4.ip_forward=1');
+
 
 #####getting local info###############################
 
