@@ -1,4 +1,7 @@
 #!/usr/bin/perl -w
+#Net::Whois::Raw module
+#to interact with the American Registry for Internet Numbers (ARIN) database for
+#an IP address:
 use strict;
 use Net::Whois::Raw;
 
