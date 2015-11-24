@@ -21,9 +21,12 @@ sub dns {    # search sub domains:
 	my $dnsLookup = $dns->search($host_name);
 	if ($dnsLookup) {
 		foreach my $ip ( $dnsLookup->answer ) {
-			if ( $ip->type eq 'A' and $first_detection < 1 ) { #Just A records. Why we are collecting A records only explain here
+			if ( $ip->type eq 'A' and $first_detection < 1 ) { #Just A records. Because only a records points to an IP directly. Refer the doc for further info.
 				print $host_name,": ",$ip->address,"\n"; # just the IP
 				$first_detection++;
+			}
+			elsif($ip->type eq 'CNAME' and $first_detection < 1 ){
+				print Dumper $ip,"\n"; #if returened type is CNAME. We will just dump data. This is just added for experimentation.
 			}
 			else {
 				return;
